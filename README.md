@@ -46,8 +46,10 @@ Install the only host capture dependency:
 Start the real microphone sender:
 
 ```powershell
-python .\pc\mic_sender.py --host 192.168.77.2 --port 5700 --device 7
+python .\pc\mic_sender.py --host 192.168.77.2 --port 5700
 ```
+
+The sender defaults to PyAudio device `6`, the currently connected XIBERIA headset microphone. Override it with `--device N` if Windows renumbers the audio device.
 
 For deterministic network/model testing, stream the public sample instead:
 

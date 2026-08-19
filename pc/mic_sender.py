@@ -30,7 +30,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="192.168.77.2")
     parser.add_argument("--port", type=int, default=5700)
-    parser.add_argument("--device", type=int, default=None, help="PyAudio input device index")
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=6,
+        help="PyAudio input device index (default: 6, current XIBERIA headset mic)",
+    )
     args = parser.parse_args()
 
     audio = pyaudio.PyAudio()
@@ -61,4 +66,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
