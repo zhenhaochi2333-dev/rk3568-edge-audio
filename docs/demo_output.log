@@ -1,0 +1,20 @@
+RK3568 EdgeAudio verification log (public WAV; no private recording)
+
+Board: RK3568 / ARM64 Ubuntu 20.04
+Backend: RKNN/NPU, RKNN-Toolkit2 2.3.2, matching runtime
+Input: 16000 Hz mono signed 16-bit PCM over TCP port 5700
+Window: 48000 samples (3 s), hop 24000 samples (1.5 s)
+
+[21:15:34] inference_ms=121.633
+  Whistling 0.425568
+  Speech 0.337443
+  Whistle 0.290258
+[21:15:36] inference_ms=120.625
+  Whistling 0.798258
+  Whistle 0.409205
+  Alarm 0.382299
+
+Live microphone smoke test on PyAudio device 7 also produced non-silence
+classes including Cacophony, Tools, Power tool, Clatter, Rustle, and Tap,
+then returned to Silence. Speech-specific response was not isolated.
+

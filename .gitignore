@@ -1,0 +1,8 @@
+build/
+logs/
+*.log
+pc/__pycache__/
+tools/cache/
+__pycache__/
+tests/data/private_*.wav
+tests/data/live_*.wav
