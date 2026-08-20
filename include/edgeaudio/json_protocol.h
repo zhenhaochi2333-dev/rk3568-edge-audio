@@ -61,11 +61,13 @@ inline std::string event_json(const SoundEventResult& result, const std::string&
 
 inline std::string status_json(const std::string& yamnet_backend,
                                const std::string& asr_backend,
-                               std::uint64_t samples, bool speech) {
+                               std::uint64_t samples, bool speech,
+                               double rms = 0.0) {
     std::ostringstream out;
     out << "{\"type\":\"status\",\"timestamp_ms\":"
         << (samples * 1000 / kSampleRate) << ",\"audio_samples\":" << samples
         << ",\"speech\":" << (speech ? "true" : "false")
+        << ",\"audio_rms\":" << json_number(rms)
         << ",\"yamnet_backend\":\"" << json_escape(yamnet_backend)
         << "\",\"asr_backend\":\"" << json_escape(asr_backend) << "\"}";
     return out.str();
