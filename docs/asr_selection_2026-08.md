@@ -4,7 +4,11 @@
 
 Formal ASR: **sherpa-onnx streaming Zipformer Chinese 14M** (`sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23`).
 
-VM backend: ONNX Runtime CPU. Board target: RKNN encoder/joiner experiment with CPU decoder; keep ARM CPU as the measured fallback. The final backend is decided from RK3568 RTF, latency, CPU load and memory, not from theoretical NPU TOPS.
+VM backend: ONNX Runtime CPU. Board CPU C++ fallback: verified with real
+Chinese TCP audio and partial/final output. Board target: RKNN
+encoder/joiner experiment with CPU decoder; keep ARM CPU as the measured
+fallback. The final backend is decided from RK3568 RTF, latency, CPU load and
+memory, not from theoretical NPU TOPS.
 
 ## Shortlist
 
@@ -20,6 +24,12 @@ VM backend: ONNX Runtime CPU. Board target: RKNN encoder/joiner experiment with 
 - It supports streaming state, endpoint detection and C++/C APIs through sherpa-onnx.
 - The model is small enough for the first VM and ARM fallback, while the neural encoder/joiner can remain an explicit future NPU split.
 - A real fixed-WAV run on this PC produced Chinese text: `对我做了介绍那么我想说的是大家如果对我的研究感兴趣`.
+- The board C++ path now links the sherpa-onnx C API and returns real Chinese
+  partial/final text. Its measured 20 ms feed RTF was `3.5--7.4`, so CPU is a
+  functional fallback but not yet a real-time solution on this board.
+- The same board run used real YAMNet RKNN; its 3 s windows measured
+  `42.60--56.66 ms`. No ASR RKNN model is claimed before conversion and
+  operator validation.
 
 ## Architecture review
 

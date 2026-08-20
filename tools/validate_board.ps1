@@ -12,6 +12,10 @@ $checks = @(
     "test -f $RemoteRoot/models/yamnet_class_map.csv && echo labels=PASS",
     "test -f $RemoteRoot/models/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23/tokens.txt && echo asr_model=PASS || echo asr_model=TO_VERIFY",
     "test -f $RemoteRoot/lib/librknnrt.so && echo rknn_runtime=PASS",
+    "test -f $RemoteRoot/lib/libsherpa-onnx-c-api.so && echo sherpa_c_api=PASS || echo sherpa_c_api=TO_VERIFY",
+    "test -f $RemoteRoot/lib/libonnxruntime.so && echo onnxruntime=PASS || echo onnxruntime=TO_VERIFY",
+    "test -x $RemoteRoot/bin/thermal_guard.sh && echo thermal_guard=PASS || echo thermal_guard=TO_VERIFY",
+    'for z in /sys/class/thermal/thermal_zone*/temp; do test -r "$z" && echo "$z=$(cat "$z")"; done',
     "ldd $RemoteRoot/bin/audio_receiver || true",
     "test -c /dev/rknpu0 && echo rknpu_device=PASS || echo rknpu_device=TO_VERIFY",
     "free -h"

@@ -12,23 +12,23 @@ namespace edgeaudio {
 
 AsrEngine::AsrEngine(Config config) : config_(std::move(config)) {
 #if EDGEAUDIO_HAS_SHERPA
-    SherpaOnnxOnlineRecognizerConfig config{};
-    config.feat_config.sample_rate = kSampleRate;
-    config.feat_config.feature_dim = 80;
-    config.model_config.transducer.encoder = config_.encoder.c_str();
-    config.model_config.transducer.decoder = config_.decoder.c_str();
-    config.model_config.transducer.joiner = config_.joiner.c_str();
-    config.model_config.tokens = config_.tokens.c_str();
-    config.model_config.num_threads = config_.threads;
-    config.model_config.provider = config_.backend == "rknn" ? "rknn" : "cpu";
-    config.model_config.model_type = "zipformer";
-    config.model_config.modeling_unit = "cjkchar";
-    config.decoding_method = "greedy_search";
-    config.enable_endpoint = config_.endpoint_detection ? 1 : 0;
-    config.rule1_min_trailing_silence = 2.4f;
-    config.rule2_min_trailing_silence = 1.2f;
-    config.rule3_min_utterance_length = 20.0f;
-    const auto* recognizer = SherpaOnnxCreateOnlineRecognizer(&config);
+    SherpaOnnxOnlineRecognizerConfig recognizer_config{};
+    recognizer_config.feat_config.sample_rate = kSampleRate;
+    recognizer_config.feat_config.feature_dim = 80;
+    recognizer_config.model_config.transducer.encoder = config_.encoder.c_str();
+    recognizer_config.model_config.transducer.decoder = config_.decoder.c_str();
+    recognizer_config.model_config.transducer.joiner = config_.joiner.c_str();
+    recognizer_config.model_config.tokens = config_.tokens.c_str();
+    recognizer_config.model_config.num_threads = config_.threads;
+    recognizer_config.model_config.provider = config_.backend == "rknn" ? "rknn" : "cpu";
+    recognizer_config.model_config.model_type = "zipformer";
+    recognizer_config.model_config.modeling_unit = "cjkchar";
+    recognizer_config.decoding_method = "greedy_search";
+    recognizer_config.enable_endpoint = config_.endpoint_detection ? 1 : 0;
+    recognizer_config.rule1_min_trailing_silence = 2.4f;
+    recognizer_config.rule2_min_trailing_silence = 1.2f;
+    recognizer_config.rule3_min_utterance_length = 20.0f;
+    const auto* recognizer = SherpaOnnxCreateOnlineRecognizer(&recognizer_config);
     if (!recognizer) {
         error_ = "SherpaOnnxCreateOnlineRecognizer failed";
         return;

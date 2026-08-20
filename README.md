@@ -28,9 +28,15 @@ The model archive is public and intentionally ignored by Git because it is large
 python -m pip install -r .\pc\requirements.txt
 .\tools\download_asr_model.ps1
 python .\tools\asr_file_test.py .\models\asr\sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23\test_wavs\0.wav
+python .\tools\asr_regression.py --output .\logs\asr_regression.json
 ```
 
 The fixed-WAV test must print non-empty Chinese text and an RTF. It is a real model pass; no mock text is accepted.
+The regression command runs the public `test_wavs/0.wav` and `1.wav` files
+downloaded with the official sherpa-onnx model release, and checks the bundled
+`8k.wav` negative case is rejected because EdgeAudio requires 16 kHz mono
+PCM16. The current PC results are real Chinese transcripts with ONNX CPU RTF
+about 0.013--0.016 on both valid files.
 
 ## Linux C++ build
 
@@ -45,6 +51,10 @@ cmake --build build -j$(nproc)
 ```
 
 The prefix must contain `include/sherpa-onnx/c-api/c-api.h` and `lib/libsherpa-onnx-c-api.so`. The current Windows check compiles the portable C++ ASR wrapper only; `audio_receiver` is POSIX/Linux code.
+
+For a repeatable ARM64 sherpa build with RKNN headers, ONNX Runtime and the
+same thermal guard, use `tools/build_sherpa_rk3568.sh` with
+`SHERPA_ONNX_SOURCE`, `ONNXRUNTIME_ROOT`, and optionally `RKNN_ROOT` set.
 
 Run in VM with the real ASR model and explicit YAMNet mock status:
 
@@ -86,7 +96,20 @@ python .\pc\wav_sender.py .\models\asr\sherpa-onnx-streaming-zipformer-zh-14M-20
 .\tools\stop_edgeaudio.ps1
 ```
 
+When the C++ receiver is linked to sherpa-onnx, pass its install prefix so the
+deployment package carries `libsherpa-onnx-c-api.so` and `libonnxruntime.so`:
+
+```powershell
+.\tools\deploy_rk3568.ps1 -BoardHost 192.168.77.2 -SherpaOnnxRoot C:\path\to\sherpa-onnx\install
+```
+
 The board script does not invent ASR RKNN files. They must be supplied after a successful model conversion and operator validation. Until then use the CPU C++ ASR backend and keep the NPU experiment as a separate package.
+
+Board build and board runtime are wrapped by `tools/thermal_guard.sh`. It
+monitors the SoC thermal zone, pauses the EdgeAudio process at 78 °C, and
+resumes it after cooling to 68 °C. Thresholds and polling interval can be
+overridden with `EDGEAUDIO_THERMAL_PAUSE_C`, `EDGEAUDIO_THERMAL_RESUME_C`,
+and `EDGEAUDIO_THERMAL_POLL_S`.
 
 ## JSON protocol
 
@@ -106,14 +129,18 @@ Status and VAD messages use `type=status` and `type=vad`. No confidence is fabri
 
 ## Testing status
 
-- Real fixed-WAV Chinese ASR: PASS on Windows ONNX CPU; selected model produced Chinese text and RTF 0.021 on the official 5.61 s sample.
+- Real fixed-WAV Chinese ASR: PASS on Windows ONNX CPU; both official 16 kHz Chinese samples produced non-empty Chinese text with RTF 0.013--0.016.
 - C++17 portable ASR wrapper host compile: PASS with MSVC/CMake.
-- C++ Linux receiver source: READY for Ubuntu/board build; not compiled in this Windows host because POSIX socket and ARM RKNN runtime are Linux-only.
+- C++ Linux receiver: PASS on the RK3568 board with real TCP PCM, VAD, sherpa-onnx C API CPU ASR and YAMNet RKNN.
 - PC GUI/protocol/scripts: Python syntax checked; real GUI display and physical microphone remain to run in the user session.
-- YAMNet RKNN: board acceptance PASS; measured sample-window inference was 127.76--129.20 ms on `root@192.168.77.2`.
-- ASR RKNN/hybrid: conversion and measured comparison are `TO VERIFY ON RK3568`; CPU fallback is implemented through the same C++ engine.
+- YAMNet RKNN: board acceptance PASS; the full pipeline measured 42.60--56.66 ms per 3 s window on `root@192.168.77.2`.
+- Board CPU ASR: real Chinese partial/final text PASS, but 20 ms feed RTF was 3.5--7.4; RKNN/hybrid conversion and A/B comparison remain `TO VERIFY ON RK3568`.
 
-The board result is recorded in `docs/board_validation_2026-08-20.md`: YAMNet RKNN produced real Top-5 results on `root@192.168.77.2` with 127.76--129.20 ms inference for the official sample. The board image currently lacks the sherpa-onnx C API shared runtime, so the normal process correctly refuses to start ASR; `--allow-asr-unavailable` is only a diagnostic switch for YAMNet/protocol validation and never produces ASR text.
+The board result is recorded in `docs/board_validation_2026-08-20.md`: the
+current isolated board build has both C++ backends enabled, and the full
+pipeline produced real YAMNet RKNN Top-5 plus real Chinese ASR text. CPU ASR
+is a verified fallback but not yet real-time on this board; no ASR RKNN model
+is claimed until conversion and operator validation succeed.
 
 ## Engineering differences
 
