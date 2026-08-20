@@ -4,6 +4,7 @@
 |---|---|---|---|
 | sherpa-onnx | [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | Apache-2.0 | C++/Python ASR runtime and C API; not copied into this repository |
 | Zipformer Chinese 14M | [official model release](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2) | Model archive declares Apache-2.0 | Pretrained ASR weights; downloaded by `tools/download_asr_model.ps1`, ignored by Git |
+| Official ASR test recordings | Included in the [Zipformer model release](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2) | Distributed with the model archive; retain upstream terms | Real Chinese fixed-WAV regression inputs; never used as mocked transcripts |
 | YAMNet | [Rockchip RKNN Model Zoo](https://github.com/airockchip/rknn_model_zoo/tree/main/examples/yamnet) | See upstream model-zoo and YAMNet notices | Existing 521-class sound-event model and labels |
 | Silero VAD (future replacement) | [sherpa-onnx model references](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx) | Upstream license applies | Not required by the current deterministic RMS gate |
 

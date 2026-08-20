@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SHERPA_SOURCE="${SHERPA_ONNX_SOURCE:?Set SHERPA_ONNX_SOURCE to the sherpa-onnx source tree}"
+ONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT:?Set ONNXRUNTIME_ROOT to an ARM64 ONNX Runtime prefix}"
+RKNN_ROOT="${RKNN_ROOT:-$ROOT/deps/rknn_runtime_2.3.2}"
+BUILD_DIR="${SHERPA_BUILD_DIR:-$ROOT/third_party/sherpa-onnx-build}"
+PREFIX="${SHERPA_INSTALL_PREFIX:-$BUILD_DIR/install}"
+
+export SHERPA_ONNXRUNTIME_INCLUDE_DIR="$ONNXRUNTIME_ROOT/include"
+export SHERPA_ONNXRUNTIME_LIB_DIR="$ONNXRUNTIME_ROOT/lib"
+export SHERPA_ONNX_RKNN_TOOLKIT2_LIB_DIR="$RKNN_ROOT/lib/aarch64"
+
+cmake -S "$SHERPA_SOURCE" -B "$BUILD_DIR" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+  -DBUILD_SHARED_LIBS=ON \
+  -DSHERPA_ONNX_ENABLE_C_API=ON \
+  -DSHERPA_ONNX_ENABLE_RKNN=ON \
+  -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+  -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
+  -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+  -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+  -DSHERPA_ONNX_ENABLE_JNI=OFF \
+  -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+  -DSHERPA_ONNX_ENABLE_BINARY=OFF \
+  -DSHERPA_ONNX_ENABLE_TTS=OFF \
+  -DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=OFF \
+  -DCMAKE_CXX_FLAGS="-I$RKNN_ROOT/include" \
+  -DCMAKE_C_FLAGS="-I$RKNN_ROOT/include"
+
+if [[ -x "$ROOT/tools/thermal_guard.sh" ]]; then
+  "$ROOT/tools/thermal_guard.sh" -- cmake --build "$BUILD_DIR" -j"$(nproc)"
+else
+  cmake --build "$BUILD_DIR" -j"$(nproc)"
+fi
+cmake --install "$BUILD_DIR"
