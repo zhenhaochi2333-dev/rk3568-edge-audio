@@ -36,9 +36,21 @@ def main() -> None:
         default=6,
         help="PyAudio input device index (default: 6, current XIBERIA headset mic)",
     )
+    parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="list input devices and exit",
+    )
     args = parser.parse_args()
 
     audio = pyaudio.PyAudio()
+    if args.list_devices:
+        for index in range(audio.get_device_count()):
+            info = audio.get_device_info_by_index(index)
+            if info.get("maxInputChannels", 0) > 0:
+                print(f"{index}: {info.get('name', '<unknown>')}")
+        audio.terminate()
+        return
     stream = audio.open(
         format=FORMAT,
         channels=CHANNELS,
