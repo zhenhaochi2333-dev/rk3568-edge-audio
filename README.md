@@ -16,7 +16,7 @@ Windows Mic / WAV
 
 - Sound event: YAMNet `yamnet_3s`，输入 `[1, 48000]` float32，3 s window / 1.5 s hop，521 AudioSet classes。
 - ASR: sherpa-onnx streaming Zipformer Chinese 14M，`encoder-epoch-99-avg-1.int8.onnx` + FP32 decoder/joiner，16 kHz，C++ C API。
-- Tonight/VM ASR backend: real ONNX CPU；tomorrow board compares CPU and RKNN/hybrid by measured RTF/latency。
+- Formal ASR backend: sherpa-onnx CPU；ASR RKNN/Hybrid remains an isolated experiment and is not part of the Demo runtime。
 - VAD: C++/PC deterministic 20 ms RMS gate，独立于 YAMNet；后续可替换为 Silero/WebRTC，不改变调度协议。
 - `YAMNet` VM backend defaults to explicit `VM MOCK` in the current C++ receiver because the checked-in YAMNet ONNX frontend is not linked into the C++ VM build. The board backend is `RKNN/NPU` and must be validated on RK3568.
 
@@ -103,7 +103,7 @@ deployment package carries `libsherpa-onnx-c-api.so` and `libonnxruntime.so`:
 .\tools\deploy_rk3568.ps1 -BoardHost 192.168.77.2 -SherpaOnnxRoot C:\path\to\sherpa-onnx\install
 ```
 
-The board script does not invent ASR RKNN files. They must be supplied after a successful model conversion and operator validation. Until then use the CPU C++ ASR backend and keep the NPU experiment as a separate package.
+The formal board package uses the supplied CPU ASR model and the validated YAMNet RKNN model. The ASR RKNN/Hybrid experiment is intentionally kept outside this Demo until continuous-cache accuracy and performance A/B are complete.
 
 Board build and board runtime are wrapped by `tools/thermal_guard.sh`. It
 monitors the SoC thermal zone, pauses the EdgeAudio process at 78 °C, and
@@ -125,23 +125,40 @@ Sound event:
 {"type":"sound_event","timestamp_ms":3000,"topk":[{"index":0,"label":"Speech","score":0.9}],"stable_event":"Speech","transition":"EVENT_START","inference_ms":42.0,"backend":"RKNN/NPU"}
 ```
 
-Status and VAD messages use `type=status` and `type=vad`. No confidence is fabricated for ASR.
+Status messages include `audio_rms`; VAD start/end messages include the frame RMS so the GUI can show a live input level. No confidence is fabricated for ASR.
 
 ## Testing status
 
 - Real fixed-WAV Chinese ASR: PASS on Windows ONNX CPU; both official 16 kHz Chinese samples produced non-empty Chinese text with RTF 0.013--0.016.
 - C++17 portable ASR wrapper host compile: PASS with MSVC/CMake.
 - C++ Linux receiver: PASS on the RK3568 board with real TCP PCM, VAD, sherpa-onnx C API CPU ASR and YAMNet RKNN.
-- PC GUI/protocol/scripts: Python syntax checked; real GUI display and physical microphone remain to run in the user session.
+- PC GUI/protocol/scripts: Python syntax checked; GUI shows connection, RMS level, VAD, Top-5 sound event, ASR partial/final text, command action, backend and latency.
 - YAMNet RKNN: board acceptance PASS; the full pipeline measured 42.60--56.66 ms per 3 s window on `root@192.168.77.2`.
-- Board CPU ASR: real Chinese partial/final text PASS, but 20 ms feed RTF was 3.5--7.4; RKNN/hybrid conversion and A/B comparison remain `TO VERIFY ON RK3568`.
+- Board CPU ASR: real Chinese partial/final text PASS; measured 20 ms feed RTF was 3.5--7.4. This is the formal fallback and is not replaced by the isolated ASR RKNN experiment.
 - Formal `/root/edgeaudio` runtime package: fixed-WAV TCP acceptance PASS with bundled ARM64 shared libraries and thermal guard; live microphone/GUI/reconnect remains for the user session.
 
 The board result is recorded in `docs/board_validation_2026-08-20.md`: the
 current isolated board build has both C++ backends enabled, and the full
 pipeline produced real YAMNet RKNN Top-5 plus real Chinese ASR text. CPU ASR
-is a verified fallback but not yet real-time on this board; no ASR RKNN model
-is claimed until conversion and operator validation succeed.
+is a verified fallback but not yet real-time on this board. The separate ASR RKNN
+experiment has its own runtime diagnosis and is not merged into the Demo.
+
+## Final Demo polish
+
+The intended interview demonstration is deliberately small:
+
+1. Start the board core and the PC GUI.
+2. Confirm the green connection state and live RMS bar.
+3. Say `开始监控`; show the Chinese transcript and `START_MONITORING | Monitoring Started`.
+4. Create speech, tapping or music; show VAD and the stable YAMNet event/Top-5 list.
+5. Say `查看状态` or `停止监控`; show the parsed command and backend/latency fields.
+
+Detailed operator steps are in [docs/demo_script.md](docs/demo_script.md). The current
+formal state is recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md). The ASR RKNN
+experiment remains on the separate `feature/asr-rknn-hybrid` branch and is not part
+of this formal Demo branch.
+The 30-minute reconnect and thermal-guard result is recorded in
+[docs/stability_test_report.md](docs/stability_test_report.md).
 
 ## Engineering differences
 
