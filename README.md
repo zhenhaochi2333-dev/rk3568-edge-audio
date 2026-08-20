@@ -5,11 +5,23 @@
 ```text
 Windows Mic / WAV
   -> PCM16 16 kHz mono TCP:5700
-  -> C++ AudioRingBuffer
+  -> C++ TcpAudioReceiver / PCM16 framing
+  -> AudioStreamBuffer (3 s / 1.5 s hop)
       -> 20 ms Speech Gate -> streaming Chinese ASR
-      -> 3 s / 1.5 s YAMNet window -> RKNN/NPU or VM mock
+      -> YamnetRknnModel -> YamnetPostProcessor -> RKNN/NPU or VM mock
   -> JSON TCP:5701
   -> Windows Tk GUI
+```
+
+The formal C++ path keeps the data flow small and explicit:
+
+```text
+rk3568/audio_receiver.cpp       lifecycle + VAD/ASR/YAMNet scheduling
+rk3568/tcp_audio_receiver.cpp   POSIX socket + arbitrary-byte PCM16 stream
+rk3568/yamnet_rknn.cpp          RKNN metadata, run and RAII resource lifetime
+rk3568/yamnet_postprocess.cpp   6-frame average, Top-K and labels
+include/edgeaudio/audio_stream_buffer.h
+                                 bounded absolute sample timeline
 ```
 
 ## Project decision
@@ -51,6 +63,18 @@ cmake --build build -j$(nproc)
 ```
 
 The prefix must contain `include/sherpa-onnx/c-api/c-api.h` and `lib/libsherpa-onnx-c-api.so`. The current Windows check compiles the portable C++ ASR wrapper only; `audio_receiver` is POSIX/Linux code.
+
+Build and run the dependency-free C++ regression tests:
+
+```powershell
+cmake -S rk3568 -B build-windows -DCMAKE_BUILD_TYPE=Release
+cmake --build build-windows --config Release --target edgeaudio_tests edgeaudio_host_check
+ctest --test-dir build-windows -C Release --output-on-failure
+```
+
+The tests cover arbitrary TCP byte splits, including odd-byte PCM16 framing, the
+3 s / 1.5 s rolling window, circular-buffer overwrite behavior, Top-K ordering,
+ties, empty input, oversized K and AudioSet label mapping.
 
 For a repeatable ARM64 sherpa build with RKNN headers, ONNX Runtime and the
 same thermal guard, use `tools/build_sherpa_rk3568.sh` with
@@ -131,11 +155,21 @@ Status messages include `audio_rms`; VAD start/end messages include the frame RM
 
 - Real fixed-WAV Chinese ASR: PASS on Windows ONNX CPU; both official 16 kHz Chinese samples produced non-empty Chinese text with RTF 0.013--0.016.
 - C++17 portable ASR wrapper host compile: PASS with MSVC/CMake.
-- C++ Linux receiver: PASS on the RK3568 board with real TCP PCM, VAD, sherpa-onnx C API CPU ASR and YAMNet RKNN.
 - PC GUI/protocol/scripts: Python syntax checked; GUI shows connection, RMS level, VAD, Top-5 sound event, ASR partial/final text, command action, backend and latency.
-- YAMNet RKNN: board acceptance PASS; the full pipeline measured 42.60--56.66 ms per 3 s window on `root@192.168.77.2`.
+
+Previously verified RK3568 hardware results, recorded before the current
+engineering refactor:
+
+- C++ Linux receiver: PASS with real TCP PCM, VAD, sherpa-onnx C API CPU ASR and YAMNet RKNN.
+- YAMNet RKNN: PASS; full pipeline measured 42.60--56.66 ms per 3 s window.
 - Board CPU ASR: real Chinese partial/final text PASS; measured 20 ms feed RTF was 3.5--7.4. This is the formal fallback and is not replaced by the isolated ASR RKNN experiment.
-- Formal `/root/edgeaudio` runtime package: fixed-WAV TCP acceptance PASS with bundled ARM64 shared libraries and thermal guard; live microphone/GUI/reconnect remains for the user session.
+- Formal `/root/edgeaudio` runtime package: fixed-WAV TCP acceptance PASS with bundled ARM64 shared libraries and thermal guard.
+
+The board results above are historical evidence recorded from earlier sessions.
+The current cleanup session could not reconnect to `192.168.77.2:22`, so new
+RK3568 runtime, RKNN performance, and live-microphone claims are **NOT
+REVALIDATED ON BOARD IN THIS SESSION**. The Windows CMake/unit test and
+portable syntax checks are local validation only.
 
 The board result is recorded in `docs/board_validation_2026-08-20.md`: the
 current isolated board build has both C++ backends enabled, and the full
@@ -163,7 +197,9 @@ The 30-minute reconnect and thermal-guard result is recorded in
 
 ## Engineering differences
 
-Third-party runtime/model code is isolated behind `AsrEngine` and documented in `THIRD_PARTY.md`. EdgeAudio owns the TCP PCM protocol, bounded multi-consumer timeline, VAD gate, YAMNet window/stabilizer, result fusion JSON, command parser, GUI, reconnect behavior, deployment scripts, and performance fields.
+Third-party runtime/model code is isolated behind `AsrEngine` and documented in `THIRD_PARTY.md`. EdgeAudio owns the TCP PCM16 framing, bounded sample timeline, VAD gate, YAMNet window/postprocess/stabilizer, result fusion JSON, command parser, GUI, reconnect behavior, deployment scripts, and performance fields.
+
+More detailed engineering decisions are in [docs/engineering.md](docs/engineering.md).
 
 ## Scope boundary
 

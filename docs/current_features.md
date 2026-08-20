@@ -1,6 +1,8 @@
 # RK3568 EdgeAudio 现有功能
 
 > 本文记录当前代码中已经实现或已经验证的功能，不代表未来规划。
+>
+> 板端验证项沿用此前记录；本轮工程化重构期间无法连接 `192.168.77.2:22`，因此新的 RK3568 运行时结果标记为 `NOT REVALIDATED ON BOARD IN THIS SESSION`。
 
 ## 1. 项目定位
 
@@ -46,6 +48,7 @@ PC GUI + RK3568 板端 GUI
 正式核心使用 C++17 实现，包括：
 
 - TCP 音频接收；
+- `TcpAudioReceiver` 与 `Pcm16StreamAssembler` 处理任意 TCP byte split，不依赖 `recv()` 边界；
 - 有界 AudioRingBuffer；
 - 连续音频时间轴；
 - VAD / Speech Gate 调度；

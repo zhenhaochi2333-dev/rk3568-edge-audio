@@ -1,5 +1,11 @@
 build/
 build-windows/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+*.obj
+*.o
+*.exe
 logs/
 *.log
 pc/__pycache__/

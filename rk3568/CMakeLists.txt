@@ -20,14 +20,51 @@ if(EXISTS "${SHERPA_ONNX_ROOT}/include/sherpa-onnx/c-api/c-api.h")
     set(EDGEAUDIO_HAS_SHERPA ON)
 endif()
 
+function(edgeaudio_enable_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+# These tests deliberately avoid RKNN and sherpa-onnx so they can run on a
+# Windows host, an Ubuntu VM, or the ARM64 board without extra test packages.
+enable_testing()
+add_executable(edgeaudio_tests
+    ../tests/edgeaudio_tests.cpp
+    pcm16_stream_assembler.cpp
+    yamnet_postprocess.cpp)
+target_include_directories(edgeaudio_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../include")
+target_compile_definitions(edgeaudio_tests PRIVATE EDGEAUDIO_HAS_RKNN=0 EDGEAUDIO_HAS_SHERPA=0)
+edgeaudio_enable_warnings(edgeaudio_tests)
+add_test(NAME edgeaudio_tests COMMAND edgeaudio_tests)
+
 if(WIN32)
     add_library(edgeaudio_host_check OBJECT asr_engine.cpp)
     target_include_directories(edgeaudio_host_check PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../include")
     target_compile_definitions(edgeaudio_host_check PRIVATE
         EDGEAUDIO_HAS_RKNN=0 EDGEAUDIO_HAS_SHERPA=0)
-    target_compile_options(edgeaudio_host_check PRIVATE /W4)
-    message(STATUS "Windows host check builds the portable ASR wrapper only; audio_receiver is Linux/POSIX code")
+    edgeaudio_enable_warnings(edgeaudio_host_check)
+    message(STATUS "Windows host check builds the portable ASR wrapper; audio_receiver is POSIX/Linux code")
     return()
+endif()
+
+add_library(edgeaudio_core STATIC
+    pcm16_stream_assembler.cpp
+    tcp_audio_receiver.cpp
+    yamnet_postprocess.cpp)
+target_include_directories(edgeaudio_core PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../include")
+edgeaudio_enable_warnings(edgeaudio_core)
+
+add_library(edgeaudio_rknn STATIC yamnet_rknn.cpp)
+target_include_directories(edgeaudio_rknn PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../include")
+target_compile_definitions(edgeaudio_rknn PUBLIC EDGEAUDIO_HAS_RKNN=$<BOOL:${EDGEAUDIO_HAS_RKNN}>)
+edgeaudio_enable_warnings(edgeaudio_rknn)
+
+if(EDGEAUDIO_HAS_RKNN)
+    target_include_directories(edgeaudio_rknn PRIVATE "${RKNN_ROOT}/include")
+    target_link_libraries(edgeaudio_rknn PUBLIC "${RKNN_ROOT}/lib/aarch64/librknnrt.so")
 endif()
 
 add_executable(audio_receiver audio_receiver.cpp asr_engine.cpp)
@@ -35,16 +72,9 @@ target_include_directories(audio_receiver PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../
 target_compile_definitions(audio_receiver PRIVATE
     EDGEAUDIO_HAS_RKNN=$<BOOL:${EDGEAUDIO_HAS_RKNN}>
     EDGEAUDIO_HAS_SHERPA=$<BOOL:${EDGEAUDIO_HAS_SHERPA}>)
-if(MSVC)
-    target_compile_options(audio_receiver PRIVATE /W4)
-else()
-    target_compile_options(audio_receiver PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+target_link_libraries(audio_receiver PRIVATE edgeaudio_core edgeaudio_rknn)
+edgeaudio_enable_warnings(audio_receiver)
 
-if(EDGEAUDIO_HAS_RKNN)
-    target_include_directories(audio_receiver PRIVATE "${RKNN_ROOT}/include")
-    target_link_libraries(audio_receiver PRIVATE "${RKNN_ROOT}/lib/aarch64/librknnrt.so")
-endif()
 if(EDGEAUDIO_HAS_SHERPA)
     find_library(SHERPA_C_API sherpa-onnx-c-api PATHS "${SHERPA_ONNX_ROOT}/lib" NO_DEFAULT_PATH)
     if(NOT SHERPA_C_API)
