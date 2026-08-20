@@ -1,0 +1,25 @@
+param(
+    [string]$BoardHost = '192.168.77.2',
+    [string]$BoardUser = 'root',
+    [string]$RemoteRoot = '/root/edgeaudio'
+)
+$ErrorActionPreference = 'Stop'
+
+$checks = @(
+    "uname -m",
+    "test -x $RemoteRoot/bin/audio_receiver && echo binary=PASS",
+    "test -f $RemoteRoot/models/yamnet_3s.rknn && echo yamnet_model=PASS",
+    "test -f $RemoteRoot/models/yamnet_class_map.csv && echo labels=PASS",
+    "test -f $RemoteRoot/models/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23/tokens.txt && echo asr_model=PASS || echo asr_model=TO_VERIFY",
+    "test -f $RemoteRoot/lib/librknnrt.so && echo rknn_runtime=PASS",
+    "ldd $RemoteRoot/bin/audio_receiver || true",
+    "test -c /dev/rknpu0 && echo rknpu_device=PASS || echo rknpu_device=TO_VERIFY",
+    "free -h"
+)
+foreach ($check in $checks) {
+    Write-Host "CHECK $check"
+    ssh -o ConnectTimeout=5 "${BoardUser}@${BoardHost}" $check
+    if ($LASTEXITCODE -ne 0) { Write-Warning "failed: $check" }
+}
+Write-Host 'Dynamic acceptance remains for tomorrow: YAMNet RKNN latency, ASR RKNN/CPU RTF, live microphone, GUI reconnect.'
+

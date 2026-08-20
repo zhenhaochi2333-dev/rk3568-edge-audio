@@ -30,10 +30,27 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="192.168.77.2")
     parser.add_argument("--port", type=int, default=5700)
-    parser.add_argument("--device", type=int, default=None, help="PyAudio input device index")
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=6,
+        help="PyAudio input device index (default: 6, current XIBERIA headset mic)",
+    )
+    parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="list input devices and exit",
+    )
     args = parser.parse_args()
 
     audio = pyaudio.PyAudio()
+    if args.list_devices:
+        for index in range(audio.get_device_count()):
+            info = audio.get_device_info_by_index(index)
+            if info.get("maxInputChannels", 0) > 0:
+                print(f"{index}: {info.get('name', '<unknown>')}")
+        audio.terminate()
+        return
     stream = audio.open(
         format=FORMAT,
         channels=CHANNELS,
