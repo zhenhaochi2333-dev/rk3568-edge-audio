@@ -61,4 +61,3 @@ endif()
 
 message(STATUS "EdgeAudio RKNN backend: ${EDGEAUDIO_HAS_RKNN}")
 message(STATUS "EdgeAudio sherpa-onnx ASR backend: ${EDGEAUDIO_HAS_SHERPA}")
-

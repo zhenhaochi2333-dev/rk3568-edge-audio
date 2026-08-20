@@ -71,4 +71,3 @@ reserved for the user session.
    RTF after the final model split.
 3. Validate the packaged deployment path with the real microphone, PC GUI and
    reconnect behavior.
-

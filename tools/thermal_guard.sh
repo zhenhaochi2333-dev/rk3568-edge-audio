@@ -65,4 +65,3 @@ while kill -0 "$child" 2>/dev/null; do
   sleep "$interval_s"
 done
 wait "$child"
-

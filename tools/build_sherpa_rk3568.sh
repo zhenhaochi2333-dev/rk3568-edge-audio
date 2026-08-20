@@ -36,4 +36,3 @@ else
   cmake --build "$BUILD_DIR" -j"$(nproc)"
 fi
 cmake --install "$BUILD_DIR"
-

@@ -59,4 +59,3 @@ ASR RKNN/Hybrid 实验保持在独立分支 `feature/asr-rknn-hybrid`，包括�
 - 30 分钟重连回归：PASS，142 次循环，过程记录见 [docs/stability_test_report.md](docs/stability_test_report.md)。
 - 演示步骤：见 [docs/demo_script.md](docs/demo_script.md)。
 - 现场耳机麦克风演示、最终板端性能 A/B：仍需明天在真实用户环境完成。
-

@@ -48,4 +48,3 @@
 ## 限制
 
 本轮 30 分钟循环使用固定真实 WAV，不等同于 30 分钟物理耳机麦克风输入；Windows GUI 已启动并用真实结果链路做过显示验证，但正式板端的现场演示仍需明天用真实耳机执行 [docs/demo_script.md](demo_script.md)。CPU ASR 在 RK3568 上此前测得 20 ms feed RTF 为 `3.5--7.4`，因此正式 Demo 不宣称板端 CPU ASR 已实时；ASR RKNN/Hybrid 仍作为独立实验资产保留。
-

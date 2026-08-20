@@ -23,7 +23,6 @@ import wave
 from pathlib import Path
 
 import numpy as np
-import sherpa_onnx
 
 RATE = 16_000
 FRAME = 320
@@ -97,34 +96,7 @@ class EnergyVad:
         return self.active, rms, started, False
 
 
-def make_recognizer(model_dir: Path, threads: int):
-    return sherpa_onnx.OnlineRecognizer.from_transducer(
-        tokens=str(model_dir / "tokens.txt"),
-        encoder=str(model_dir / "encoder-epoch-99-avg-1.int8.onnx"),
-        decoder=str(model_dir / "decoder-epoch-99-avg-1.onnx"),
-        joiner=str(model_dir / "joiner-epoch-99-avg-1.int8.onnx"),
-        num_threads=threads,
-        model_type="zipformer",
-        enable_endpoint_detection=True,
-    )
-
-
-def decode_audio(recognizer, samples: np.ndarray) -> str:
-    stream = recognizer.create_stream()
-    for offset in range(0, len(samples), 3200):
-        stream.accept_waveform(RATE, samples[offset:offset + 3200])
-        while recognizer.is_ready(stream):
-            recognizer.decode_stream(stream)
-    stream.input_finished()
-    while recognizer.is_ready(stream):
-        recognizer.decode_stream(stream)
-    try:
-        return recognizer.get_result(stream).strip()
-    except IndexError:
-        return ""
-
-
-def decode_external(model_dir: Path, samples: np.ndarray) -> tuple[str, float, float]:
+def decode_external(model_dir: Path, samples: np.ndarray, threads: int) -> tuple[str, float, float]:
     """Run the same real ASR regression entry point in a clean process.
 
     This avoids state/allocator interactions between the long-lived TCP thread
@@ -141,7 +113,7 @@ def decode_external(model_dir: Path, samples: np.ndarray) -> tuple[str, float, f
             wav.setframerate(RATE)
             wav.writeframes(pcm.tobytes())
         command = [sys.executable, str(Path(__file__).resolve().parents[1] / "tools" / "asr_file_test.py"),
-                   path, "--model-dir", str(model_dir)]
+                   path, "--model-dir", str(model_dir), "--threads", str(threads)]
         child_env = os.environ.copy()
         child_env["PYTHONIOENCODING"] = "utf-8"
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
@@ -171,6 +143,7 @@ def serve(args):
     model_dir = Path(args.model_dir).resolve()
     publisher = Publisher(args.result_port)
     publisher.start()
+    monitoring_enabled = True
     audio_server = socket.socket()
     audio_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     audio_server.bind(("0.0.0.0", args.audio_port))
@@ -198,10 +171,10 @@ def serve(args):
                     for offset in range(0, len(pcm) - FRAME + 1, FRAME):
                         active, rms, started, ended = vad.process(pcm[offset:offset + FRAME])
                         timestamp = total * 1000 // RATE
-                        if started:
+                        if started and monitoring_enabled:
                             publisher.publish({"type": "vad", "timestamp_ms": timestamp,
                                                "state": "speech_start", "rms": round(rms, 4)})
-                        if ended:
+                        if ended and monitoring_enabled:
                             publisher.publish({"type": "vad", "timestamp_ms": timestamp,
                                                "state": "speech_end", "rms": round(rms, 4)})
                         total += FRAME
@@ -212,7 +185,7 @@ def serve(args):
                 digest = hashlib.sha256(np.clip(audio * 32768.0, -32768, 32767).astype('<i2').tobytes()).hexdigest()
                 print(f"AUDIO_BUFFER samples={len(audio)} min={audio.min():.4f} max={audio.max():.4f} sha256={digest}", flush=True)
                 try:
-                    text, elapsed_ms, model_rtf = decode_external(model_dir, audio)
+                    text, elapsed_ms, model_rtf = decode_external(model_dir, audio, args.threads)
                 except Exception as error:
                     # Keep the TCP endpoint alive if the Windows native binding
                     # rejects one child-process invocation. The error is visible
@@ -222,15 +195,27 @@ def serve(args):
                     publisher.publish({"type": "status", "state": "asr_error",
                                        "error": message, "backend": "VM ONNX CPU"})
                 else:
-                    item = {"type": "asr", "timestamp_ms": len(audio) * 1000 // RATE,
-                            "text": text, "final": True, "latency_ms": round(elapsed_ms, 2),
-                            "rtf": round(model_rtf, 3),
-                            "backend": "VM ONNX CPU"}
                     command = command_for(text)
+                    if command == "START_MONITORING":
+                        monitoring_enabled = True
+                    elif command == "STOP_MONITORING":
+                        monitoring_enabled = False
+                    if monitoring_enabled or command:
+                        item = {"type": "asr", "timestamp_ms": len(audio) * 1000 // RATE,
+                                "text": text, "final": True, "latency_ms": round(elapsed_ms, 2),
+                                "rtf": round(model_rtf, 3),
+                                "backend": "VM ONNX CPU",
+                                "monitoring": monitoring_enabled}
+                        if command:
+                            item["command"] = command
+                        print(json.dumps(item, ensure_ascii=False), flush=True)
+                        publisher.publish(item)
                     if command:
-                        item["command"] = command
-                    print(json.dumps(item, ensure_ascii=False), flush=True)
-                    publisher.publish(item)
+                        state = {"type": "status", "state": "monitoring_changed",
+                                 "monitoring": monitoring_enabled,
+                                 "yamnet_backend": "VM MOCK",
+                                 "asr_backend": "VM ONNX CPU"}
+                        publisher.publish(state)
             print("AUDIO_CLIENT_DISCONNECTED", flush=True)
     finally:
         audio_server.close()
@@ -248,4 +233,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

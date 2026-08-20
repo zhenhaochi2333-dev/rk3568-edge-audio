@@ -6,8 +6,10 @@
 
 - RK3568 已部署正式 `/root/edgeaudio` 包。
 - PC 已安装 `pc/requirements.txt`。
-- Windows 耳机麦克风已接入；如设备编号变化，先运行 `python pc/mic_sender.py --list-devices`。
-- `board` 模式启动脚本会让 GUI 和麦克风连接 `192.168.77.2` 的 `5700/5701`；VM 模式使用 `127.0.0.1`。
+- Windows `XIBERIA K03S`（K30S）耳机麦克风已接入；启动时会自动按名称优先选择它，并在 GUI 的 `Audio input` 显示实际设备。
+- Windows DirectSound 对该设备以 44.1 kHz 原生采集最稳定，`mic_sender.py` 会在 PC 端重采样为协议要求的 16 kHz PCM16，不改变板端输入格式。
+- `board` 模式启动脚本会让麦克风连接 `192.168.77.2:5700`，PC GUI 连接结果转发端口 `192.168.77.2:5702`；VM 模式仍使用 `127.0.0.1`。
+- `board` 模式还会在 RK3568 的 `DISPLAY=:0` 上启动本地 GTK 监视器；板端结果转发器把正式结果端口 `5701` 广播到 `5702`，PC GUI 和板端监视器同时读取同一份 JSON，并显示板端温度。
 
 ## 运行
 
@@ -21,15 +23,15 @@
 
 ```powershell
 .\tools\start_edgeaudio.ps1 -Mode board -BoardHost 192.168.77.2 -NoGui -NoMic
-python .\pc\edgeaudio_gui.py --host 192.168.77.2
-python .\pc\mic_sender.py --host 192.168.77.2 --port 5700
+python .\pc\edgeaudio_gui.py --host 192.168.77.2 --port 5702 --input-device auto
+python .\pc\mic_sender.py --host 192.168.77.2 --port 5700 --device auto
 ```
 
 ## 120 秒讲解顺序
 
 ### 0--20 秒：架构
 
-指出 GUI 的 `CONNECTED`、`YAMNet: RKNN/NPU`、`ASR: cpu`。说明 PC 只负责麦克风和展示，核心 AudioReceiver 在 RK3568 Linux 上运行。
+指出 PC GUI 和板端本地监视器中的 `CONNECTED`、独立的 `SOUND EVENTS · YAMNET` 区域、`YAMNet: RKNN/NPU`、`ASR: cpu`。说明 PC 只负责麦克风和远程展示，核心 AudioReceiver 与板端监视器都在 RK3568 Linux 上运行。
 
 ### 20--45 秒：命令闭环
 
@@ -52,6 +54,8 @@ START_MONITORING | Monitoring Started
 ```
 
 GUI 应显示 `QUERY_STATUS | Status Queried`。
+
+此时 `Monitoring` 区域应保持 `ON`。
 
 ### 45--80 秒：声音事件
 
@@ -77,6 +81,8 @@ GUI 应先更新 Partial，语音结束后更新 Final，并显示 ASR latency �
 
 GUI 应显示 `STOP_MONITORING | Monitoring Stopped`。最后强调：YAMNet 使用 NPU，ASR 当前正式版本使用 CPU fallback，两个后端状态均来自真实协议字段。
 
+停止后，YAMNet 声音事件和普通 VAD/ASR 结果不再继续刷新，`Monitoring` 变为 `OFF`；音频连接、板端温度和命令监听仍保持运行。再次说“开始监控”后，`Monitoring` 恢复为 `ON`，声音事件和语音结果恢复输出。
+
 ## 故障时的最短检查
 
 ```powershell
@@ -90,4 +96,3 @@ python .\pc\wav_sender.py .\models\asr\sherpa-onnx-streaming-zipformer-zh-14M-20
 ```powershell
 .\tools\stop_edgeaudio.ps1
 ```
-

@@ -1,3 +1,8 @@
+param(
+    [string]$BoardHost = '192.168.77.2',
+    [string]$BoardUser = 'root',
+    [switch]$NoBoard
+)
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $escaped = [regex]::Escape($Root)
@@ -13,4 +18,6 @@ foreach ($process in $processes) {
     Stop-Process -Id $process.ProcessId -Force
 }
 if (-not $processes) { Write-Host 'No EdgeAudio PC processes found.' }
-
+if (-not $NoBoard) {
+    ssh -o ConnectTimeout=5 "$BoardUser@$BoardHost" 'for name in board_gui relay; do file=/root/edgeaudio/run/${name}.pid; if test -f "$file"; then kill "$(cat "$file")" 2>/dev/null || true; rm -f "$file"; echo ${name}_STOPPED; fi; done'
+}

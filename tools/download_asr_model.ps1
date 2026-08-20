@@ -10,4 +10,3 @@ if (-not (Test-Path $Archive)) {
 }
 python -c "import tarfile; tarfile.open(r'$Archive','r:bz2').extractall(r'$AsrDir')"
 Write-Host "ASR model ready under $AsrDir"
-

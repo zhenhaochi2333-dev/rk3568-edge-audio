@@ -679,4 +679,3 @@ YAMNet、PANNs、EfficientAT、CED 都属于多标签声音事件分类，输出
 ```
 
 本轮不建议为了追求论文最高 mAP，直接切换到 AST、PaSST、HTS-AT 或 BEATs。
-

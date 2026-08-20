@@ -15,4 +15,3 @@ if [[ -x "$ROOT/tools/thermal_guard.sh" ]]; then
 else
   cmake --build "$ROOT/build" -j"$(nproc)"
 fi
-

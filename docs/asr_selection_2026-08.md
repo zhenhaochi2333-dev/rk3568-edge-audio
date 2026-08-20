@@ -47,4 +47,3 @@ Attention, LayerNorm, dynamic state and decoder control flow remain inside the s
 - [sherpa-onnx RKNN documentation](https://k2-fsa.github.io/sherpa/onnx/rknn/index.html)
 - [sherpa-onnx SenseVoice documentation](https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html)
 - [sherpa-onnx Whisper RKNN conversion notes](https://github.com/k2-fsa/sherpa-onnx/blob/master/scripts/whisper/rknn/README.md)
-

@@ -21,6 +21,8 @@ if (Test-Path $Package) { Remove-Item -LiteralPath $Package -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $Package 'bin'), (Join-Path $Package 'models'), (Join-Path $Package 'lib') | Out-Null
 Copy-Item (Join-Path $Build 'audio_receiver') (Join-Path $Package 'bin\audio_receiver')
 Copy-Item (Join-Path $Root 'tools\thermal_guard.sh') (Join-Path $Package 'bin\thermal_guard.sh')
+Copy-Item (Join-Path $Root 'rk3568\edgeaudio_board_gui.py') (Join-Path $Package 'bin\edgeaudio_board_gui.py')
+Copy-Item (Join-Path $Root 'rk3568\edgeaudio_result_relay.py') (Join-Path $Package 'bin\edgeaudio_result_relay.py')
 Copy-Item (Join-Path $Root 'models\yamnet_3s.rknn') (Join-Path $Package 'models\yamnet_3s.rknn')
 Copy-Item (Join-Path $Root 'models\yamnet_class_map.csv') (Join-Path $Package 'models\yamnet_class_map.csv')
 $asrSource = Join-Path $Root 'models\asr\sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23'
@@ -45,4 +47,3 @@ tar -czf $Archive -C $Package .
 scp $Archive "${BoardUser}@${BoardHost}:/tmp/edgeaudio-board-package.tar.gz"
 ssh "${BoardUser}@${BoardHost}" "mkdir -p $RemoteRoot && tar -xzf /tmp/edgeaudio-board-package.tar.gz -C $RemoteRoot && chmod +x $RemoteRoot/bin/audio_receiver"
 Write-Host "Deployed C++ board package to ${BoardUser}@${BoardHost}:$RemoteRoot"
-

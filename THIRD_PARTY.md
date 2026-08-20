@@ -21,4 +21,3 @@
 - PC GUI, deployment/validation scripts, and CPU/NPU backend reporting.
 
 Model files are not silently renamed or copied from a complete third-party demo.
-

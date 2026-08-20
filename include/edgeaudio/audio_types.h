@@ -44,4 +44,3 @@ struct SoundEventResult {
 };
 
 }  // namespace edgeaudio
-

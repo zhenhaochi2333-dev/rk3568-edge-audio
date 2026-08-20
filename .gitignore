@@ -10,4 +10,3 @@ tests/data/live_*.wav
 models/asr/
 third_party/sherpa-onnx-build/
 .venv/
-
