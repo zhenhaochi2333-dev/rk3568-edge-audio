@@ -52,11 +52,23 @@ SoC temperature stayed below `58 °C` during compilation and was about `45 °C`
 after the full pipeline test. The guard pauses the child at `78 °C` and
 resumes at `68 °C`.
 
+## Formal package
+
+The previously absent `/root/edgeaudio` directory was initialized only after
+the isolated build passed. It now contains the verified receiver, YAMNet RKNN,
+Zipformer model files, `librknnrt.so`, sherpa-onnx C API/ONNX Runtime shared
+libraries, and `thermal_guard.sh`. `LD_LIBRARY_PATH=/root/edgeaudio/lib ldd`
+resolved all required runtime libraries. A fixed WAV sent to formal ports
+`5700/5701` produced VAD, ASR and YAMNet JSON messages; the receiver was then
+stopped by exact PID. Real microphone, GUI and reconnect acceptance is still
+reserved for the user session.
+
 ## Remaining board work
 
 1. Convert and operator-validate the selected Zipformer neural network for
    RKNN, or keep the measured CPU fallback if NPU conversion is not worthwhile.
 2. Repeat CPU versus hybrid measurements with CPU load, memory, latency and
    RTF after the final model split.
-3. Validate the packaged deployment path with the real microphone and PC GUI.
+3. Validate the packaged deployment path with the real microphone, PC GUI and
+   reconnect behavior.
 

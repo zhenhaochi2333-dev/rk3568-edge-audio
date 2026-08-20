@@ -135,6 +135,7 @@ Status and VAD messages use `type=status` and `type=vad`. No confidence is fabri
 - PC GUI/protocol/scripts: Python syntax checked; real GUI display and physical microphone remain to run in the user session.
 - YAMNet RKNN: board acceptance PASS; the full pipeline measured 42.60--56.66 ms per 3 s window on `root@192.168.77.2`.
 - Board CPU ASR: real Chinese partial/final text PASS, but 20 ms feed RTF was 3.5--7.4; RKNN/hybrid conversion and A/B comparison remain `TO VERIFY ON RK3568`.
+- Formal `/root/edgeaudio` runtime package: fixed-WAV TCP acceptance PASS with bundled ARM64 shared libraries and thermal guard; live microphone/GUI/reconnect remains for the user session.
 
 The board result is recorded in `docs/board_validation_2026-08-20.md`: the
 current isolated board build has both C++ backends enabled, and the full
