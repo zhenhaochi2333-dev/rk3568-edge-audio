@@ -75,8 +75,8 @@ The Python service is a Windows/VM validation adapter using the same official sh
 
 ```powershell
 python .\pc\asr_tcp_service.py
-python .\pc\edgeaudio_gui.py --host 127.0.0.1
-python .\pc\mic_sender.py --host 127.0.0.1 --port 5700 --device 6
+python .\pc\edgeaudio_gui.py --host 127.0.0.1 --input-device auto
+python .\pc\mic_sender.py --host 127.0.0.1 --port 5700 --device auto
 ```
 
 For deterministic TCP testing:
@@ -85,7 +85,7 @@ For deterministic TCP testing:
 python .\pc\wav_sender.py .\models\asr\sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23\test_wavs\0.wav --host 127.0.0.1 --port 5700
 ```
 
-`mic_sender.py` defaults to the currently connected headset microphone (device 6) but accepts `--device N`. Use `python pc/mic_sender.py --list-devices` if Windows renumbers the headset.
+`mic_sender.py` defaults to a compatible `K30S`/`K03S` headset microphone entry. On Windows it automatically prefers FFmpeg DirectShow for this device and emits the fixed 16 kHz mono PCM16 wire format; PyAudio remains the fallback. It accepts `--device N` for an explicit index. Use `python pc/mic_sender.py --list-devices` to verify the selected device.
 
 ## Board scripts
 
@@ -145,10 +145,10 @@ experiment has its own runtime diagnosis and is not merged into the Demo.
 
 ## Final Demo polish
 
-The intended interview demonstration is deliberately small:
+The intended interview demonstration is deliberately small. In board mode, the RK3568 also launches a local GTK monitor on its Xorg display (`DISPLAY=:0`). A board-side result relay fans out the unchanged JSON from the formal `5701` publisher to `5702`, so the PC GUI and board monitor can read the same results simultaneously without another inference pipeline.
 
 1. Start the board core and the PC GUI.
-2. Confirm the green connection state and live RMS bar.
+2. Confirm the green connection state on both the PC GUI and the RK3568 local monitor, plus the live activity bar and board temperature.
 3. Say `开始监控`; show the Chinese transcript and `START_MONITORING | Monitoring Started`.
 4. Create speech, tapping or music; show VAD and the stable YAMNet event/Top-5 list.
 5. Say `查看状态` or `停止监控`; show the parsed command and backend/latency fields.
@@ -157,6 +157,7 @@ Detailed operator steps are in [docs/demo_script.md](docs/demo_script.md). The c
 formal state is recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md). The ASR RKNN
 experiment remains on the separate `feature/asr-rknn-hybrid` branch and is not part
 of this formal Demo branch.
+The board-local GTK monitor is documented in [docs/board_gui_report.md](docs/board_gui_report.md).
 The 30-minute reconnect and thermal-guard result is recorded in
 [docs/stability_test_report.md](docs/stability_test_report.md).
 

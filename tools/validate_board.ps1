@@ -15,6 +15,8 @@ $checks = @(
     "test -f $RemoteRoot/lib/libsherpa-onnx-c-api.so && echo sherpa_c_api=PASS || echo sherpa_c_api=TO_VERIFY",
     "test -f $RemoteRoot/lib/libonnxruntime.so && echo onnxruntime=PASS || echo onnxruntime=TO_VERIFY",
     "test -x $RemoteRoot/bin/thermal_guard.sh && echo thermal_guard=PASS || echo thermal_guard=TO_VERIFY",
+    "test -f $RemoteRoot/bin/edgeaudio_board_gui.py && echo board_gui=PASS || echo board_gui=TO_VERIFY",
+    "test -f $RemoteRoot/bin/edgeaudio_result_relay.py && echo result_relay=PASS || echo result_relay=TO_VERIFY",
     'for z in /sys/class/thermal/thermal_zone*/temp; do test -r "$z" && echo "$z=$(cat "$z")"; done',
     "ldd $RemoteRoot/bin/audio_receiver || true",
     "test -c /dev/rknpu0 && echo rknpu_device=PASS || echo rknpu_device=TO_VERIFY",

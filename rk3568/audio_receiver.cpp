@@ -247,13 +247,13 @@ int main_impl(const Options& options) {
     EnergyVad vad;
     CommandParser command_parser;
     std::vector<std::int16_t> yamnet_window;
-    std::deque<std::int16_t> preroll;
     std::uint64_t next_yamnet = 0;
     std::uint64_t total_samples = 0;
     std::uint64_t processed_samples = 0;
     bool speech_active = false;
     std::deque<std::int16_t> vad_pending;
     float latest_rms = 0.0f;
+    bool monitoring_enabled = true;
     std::vector<unsigned char> pending_bytes;
     std::vector<unsigned char> bytes(8192);
     while (true) {
@@ -278,31 +278,56 @@ int main_impl(const Options& options) {
                 const auto first = processed_samples;
                 const auto frame_vad = vad.process(frame.data(), frame.size(), first);
                 latest_rms = frame_vad.rms;
-                for (int i = 0; i < kVadFrameSamples; ++i) {
-                    preroll.push_back(frame[i]);
-                    if (preroll.size() > kSampleRate) preroll.pop_front();
-                }
                 if (frame_vad.speech && !speech_active) {
                     speech_active = true;
-                    publisher.publish("{\"type\":\"vad\",\"timestamp_ms\":" + std::to_string(frame_vad.timestamp_ms) + ",\"state\":\"speech_start\",\"rms\":" + json_number(frame_vad.rms) + "}");
+                    if (monitoring_enabled) {
+                        publisher.publish("{\"type\":\"vad\",\"timestamp_ms\":" + std::to_string(frame_vad.timestamp_ms) + ",\"state\":\"speech_start\",\"rms\":" + json_number(frame_vad.rms) + "}");
+                    }
                 }
                 if (speech_active) {
                     asr.feed(frame.data(), frame.size(), first, [&](const AsrResult& result) {
-                        const auto command = command_parser.parse(result.text);
-                        publisher.publish(asr_json(result, asr.backend(), command));
+                        const auto command = result.final ? command_parser.parse(result.text) : std::string();
+                        if (command == "START_MONITORING") monitoring_enabled = true;
+                        if (command == "STOP_MONITORING") monitoring_enabled = false;
+                        if (!command.empty()) {
+                            std::cout << "MONITORING_COMMAND " << command << " state="
+                                      << (monitoring_enabled ? "ON" : "OFF") << "\n" << std::flush;
+                        }
+                        if (monitoring_enabled || !command.empty()) {
+                            publisher.publish(asr_json(result, asr.backend(), command, monitoring_enabled));
+                        }
+                        if (!command.empty()) {
+                            publisher.publish(status_json(yamnet.backend(), asr.available() ? asr.backend() : "UNAVAILABLE",
+                                                          total_samples, vad.speech(), latest_rms, monitoring_enabled));
+                        }
                     });
                 }
                 processed_samples += kVadFrameSamples;
                 if (!frame_vad.speech && speech_active) {
                     speech_active = false;
                     asr.finish(first + kVadFrameSamples, [&](const AsrResult& result) {
-                        const auto command = command_parser.parse(result.text);
-                        publisher.publish(asr_json(result, asr.backend(), command));
+                        const auto command = result.final ? command_parser.parse(result.text) : std::string();
+                        if (command == "START_MONITORING") monitoring_enabled = true;
+                        if (command == "STOP_MONITORING") monitoring_enabled = false;
+                        if (!command.empty()) {
+                            std::cout << "MONITORING_COMMAND " << command << " state="
+                                      << (monitoring_enabled ? "ON" : "OFF") << "\n" << std::flush;
+                        }
+                        if (monitoring_enabled || !command.empty()) {
+                            publisher.publish(asr_json(result, asr.backend(), command, monitoring_enabled));
+                        }
+                        if (!command.empty()) {
+                            publisher.publish(status_json(yamnet.backend(), asr.available() ? asr.backend() : "UNAVAILABLE",
+                                                          total_samples, vad.speech(), latest_rms, monitoring_enabled));
+                        }
                     });
-                    publisher.publish("{\"type\":\"vad\",\"timestamp_ms\":" + std::to_string(frame_vad.timestamp_ms) + ",\"state\":\"speech_end\",\"rms\":" + json_number(frame_vad.rms) + "}");
+                    if (monitoring_enabled) {
+                        publisher.publish("{\"type\":\"vad\",\"timestamp_ms\":" + std::to_string(frame_vad.timestamp_ms) + ",\"state\":\"speech_end\",\"rms\":" + json_number(frame_vad.rms) + "}");
+                    }
                 }
                 if (ring.end_sample() >= next_yamnet + kYamnetWindowSamples) {
-                    if (ring.read(next_yamnet, kYamnetWindowSamples, &yamnet_window)) {
+                    if (monitoring_enabled &&
+                        ring.read(next_yamnet, kYamnetWindowSamples, &yamnet_window)) {
                         const auto event = yamnet.infer(yamnet_window, (next_yamnet + kYamnetWindowSamples) * 1000 / kSampleRate, vad.speech());
                         publisher.publish(event_json(event, yamnet.backend()));
                     }
@@ -312,7 +337,7 @@ int main_impl(const Options& options) {
             total_samples += sample_count;
             if (total_samples % (kSampleRate * 2) < sample_count)
                 publisher.publish(status_json(yamnet.backend(), asr.available() ? asr.backend() : "UNAVAILABLE",
-                                               total_samples, vad.speech(), latest_rms));
+                                               total_samples, vad.speech(), latest_rms, monitoring_enabled));
         }
         close(client);
         std::cout << "AUDIO_CLIENT_DISCONNECTED\n" << std::flush;
