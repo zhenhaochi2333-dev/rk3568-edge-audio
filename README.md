@@ -1,70 +1,153 @@
 # RK3568 EdgeAudio
 
-Minimal real-time sound-event demo for the RK3568:
+端侧实时音频工程：Windows/耳机麦克风输入 16 kHz 单声道 PCM16，通过 TCP 送入 Linux C++17 核心，同时驱动 VAD、中文 ASR 和 YAMNet 声音事件分支，最后以 newline-delimited JSON 回传 PC GUI。
 
 ```text
-Windows microphone -> 16 kHz mono PCM16 -> TCP:5700 -> RK3568 -> YAMNet -> top-3 classes
+Windows Mic / WAV
+  -> PCM16 16 kHz mono TCP:5700
+  -> C++ AudioRingBuffer
+      -> 20 ms Speech Gate -> streaming Chinese ASR
+      -> 3 s / 1.5 s YAMNet window -> RKNN/NPU or VM mock
+  -> JSON TCP:5701
+  -> Windows Tk GUI
 ```
 
-## Model
+## Project decision
 
-- Model: YAMNet `yamnet_3s.onnx`, Rockchip RKNN Model Zoo build
-- Source: [Rockchip RKNN Model Zoo](https://github.com/airockchip/rknn_model_zoo/tree/main/examples/yamnet)
-- License: Apache-2.0 (YAMNet / model-zoo code)
-- Input: `[1, 48000]` float32 waveform, 3 seconds at 16 kHz
-- Preprocessing: signed PCM16 divided by `32768.0`; no extra feature extraction in the application because the ONNX model contains the YAMNet log-mel frontend
-- Output: `[6, 521]`; average the six frame scores and print top 3 AudioSet labels
-- Why selected: lightweight MobileNet-based sound classifier, public weights, native 16 kHz input, and Rockchip documents RK3568 support for this exact model
+- Sound event: YAMNet `yamnet_3s`，输入 `[1, 48000]` float32，3 s window / 1.5 s hop，521 AudioSet classes。
+- ASR: sherpa-onnx streaming Zipformer Chinese 14M，`encoder-epoch-99-avg-1.int8.onnx` + FP32 decoder/joiner，16 kHz，C++ C API。
+- Tonight/VM ASR backend: real ONNX CPU；tomorrow board compares CPU and RKNN/hybrid by measured RTF/latency。
+- VAD: C++/PC deterministic 20 ms RMS gate，独立于 YAMNet；后续可替换为 Silero/WebRTC，不改变调度协议。
+- `YAMNet` VM backend defaults to explicit `VM MOCK` in the current C++ receiver because the checked-in YAMNet ONNX frontend is not linked into the C++ VM build. The board backend is `RKNN/NPU` and must be validated on RK3568.
 
-The model and AudioSet label map are stored under `models/`. The public regression sample is `tests/data/speech_whistling2.wav`; it is not a private recording.
+## ASR model setup
 
-## Build the board receiver
+The model archive is public and intentionally ignored by Git because it is large.
 
-The board build expects the ARM64 RKNN runtime staged in `deps/rknn_runtime_1.6.0/`.
+```powershell
+python -m pip install -r .\pc\requirements.txt
+.\tools\download_asr_model.ps1
+python .\tools\asr_file_test.py .\models\asr\sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23\test_wavs\0.wav
+python .\tools\asr_regression.py --output .\logs\asr_regression.json
+```
+
+The fixed-WAV test must print non-empty Chinese text and an RTF. It is a real model pass; no mock text is accepted.
+The regression command runs the public `test_wavs/0.wav` and `1.wav` files
+downloaded with the official sherpa-onnx model release, and checks the bundled
+`8k.wav` negative case is rejected because EdgeAudio requires 16 kHz mono
+PCM16. The current PC results are real Chinese transcripts with ONNX CPU RTF
+about 0.013--0.016 on both valid files.
+
+## Linux C++ build
+
+Build sherpa-onnx with its C API on Ubuntu/ARM64 or cross-compile it, then point CMake at the install prefix:
 
 ```bash
-./tools/build_board.sh
+cmake -S rk3568 -B build \
+  -DSHERPA_ONNX_ROOT=/opt/sherpa-onnx \
+  -DRKNN_ROOT=$PWD/deps/rknn_runtime_2.3.2 \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 ```
 
-The checked-in `yamnet_3s.rknn` was converted on the ARM64 Ubuntu 20.04 board environment with RKNN-Toolkit2 2.3.2 for `rk3568`, then executed with the matching 2.3.2 runtime.
+The prefix must contain `include/sherpa-onnx/c-api/c-api.h` and `lib/libsherpa-onnx-c-api.so`. The current Windows check compiles the portable C++ ASR wrapper only; `audio_receiver` is POSIX/Linux code.
 
-Run on RK3568:
+For a repeatable ARM64 sherpa build with RKNN headers, ONNX Runtime and the
+same thermal guard, use `tools/build_sherpa_rk3568.sh` with
+`SHERPA_ONNX_SOURCE`, `ONNXRUNTIME_ROOT`, and optionally `RKNN_ROOT` set.
+
+Run in VM with the real ASR model and explicit YAMNet mock status:
 
 ```bash
-./build/audio_receiver /root/rk3568-edge-audio/models/yamnet_3s.rknn \
-  /root/rk3568-edge-audio/models/yamnet_class_map.csv 5700
+./build/audio_receiver \
+  --labels models/yamnet_class_map.csv \
+  --yamnet-backend mock \
+  --asr-backend cpu \
+  --asr-tokens models/asr/.../tokens.txt \
+  --asr-encoder models/asr/.../encoder-epoch-99-avg-1.onnx \
+  --asr-decoder models/asr/.../decoder-epoch-99-avg-1.onnx \
+  --asr-joiner models/asr/.../joiner-epoch-99-avg-1.onnx
 ```
 
-## PC sender
+## PC validation
 
-Install the only host capture dependency:
+The Python service is a Windows/VM validation adapter using the same official sherpa-onnx model. It buffers one TCP utterance, runs real ASR, and publishes final JSON. This keeps the PC validation reliable while the formal Linux C++ path remains streaming.
 
 ```powershell
-.\tools\install_pc_deps.ps1
+python .\pc\asr_tcp_service.py
+python .\pc\edgeaudio_gui.py --host 127.0.0.1
+python .\pc\mic_sender.py --host 127.0.0.1 --port 5700 --device 6
 ```
 
-Start the real microphone sender:
+For deterministic TCP testing:
 
 ```powershell
-python .\pc\mic_sender.py --host 192.168.77.2 --port 5700 --device 7
+python .\pc\wav_sender.py .\models\asr\sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23\test_wavs\0.wav --host 127.0.0.1 --port 5700
 ```
 
-For deterministic network/model testing, stream the public sample instead:
+`mic_sender.py` defaults to the currently connected headset microphone (device 6) but accepts `--device N`. Use `python pc/mic_sender.py --list-devices` if Windows renumbers the headset.
+
+## Board scripts
 
 ```powershell
-python .\pc\wav_sender.py .\tests\data\speech_whistling2.wav --host 192.168.77.2 --port 5700
+.\tools\deploy_rk3568.ps1 -BoardHost 192.168.77.2 -BoardUser root
+.\tools\validate_board.ps1 -BoardHost 192.168.77.2 -BoardUser root
+.\tools\start_edgeaudio.ps1 -Mode board -BoardHost 192.168.77.2
+.\tools\stop_edgeaudio.ps1
 ```
 
-Then make sounds for 30–60 seconds: speak, type, clap, and stay quiet. The receiver emits one result every 1.5 seconds after its 3-second window is full.
+When the C++ receiver is linked to sherpa-onnx, pass its install prefix so the
+deployment package carries `libsherpa-onnx-c-api.so` and `libonnxruntime.so`:
 
-## Verified status
+```powershell
+.\tools\deploy_rk3568.ps1 -BoardHost 192.168.77.2 -SherpaOnnxRoot C:\path\to\sherpa-onnx\install
+```
 
-- PC ONNX reference inference: verified on the public whistling WAV.
-- TCP receiver/sender: verified with the public WAV and the live PC microphone.
-- Backend: RKNN/NPU verified on the RK3568; fixed-WAV inference was about 120 ms and live windows were about 43–121 ms.
-- Live microphone: real input produced `Cacophony`, `Tools`, `Power tool`, `Clatter`, `Rustle`, and `Tap` classifications before returning to `Silence`. Speech was not isolated clearly enough to claim a speech-specific response.
-- Existing `rk3568-edge-vision` repositories: read-only and not modified by this project.
+The board script does not invent ASR RKNN files. They must be supplied after a successful model conversion and operator validation. Until then use the CPU C++ ASR backend and keep the NPU experiment as a separate package.
 
-## Next step
+Board build and board runtime are wrapped by `tools/thermal_guard.sh`. It
+monitors the SoC thermal zone, pauses the EdgeAudio process at 78 °C, and
+resumes it after cooling to 68 °C. Thresholds and polling interval can be
+overridden with `EDGEAUDIO_THERMAL_PAUSE_C`, `EDGEAUDIO_THERMAL_RESUME_C`,
+and `EDGEAUDIO_THERMAL_POLL_S`.
 
-Convert `models/yamnet_3s.onnx` with RKNN-Toolkit2 for `rk3568`, deploy the `.rknn` plus receiver to the board, and run the deterministic WAV test before live microphone testing.
+## JSON protocol
+
+ASR:
+
+```json
+{"type":"asr","timestamp_ms":3200,"text":"现在开始测试端侧语音识别","final":true,"latency_ms":120.0,"rtf":0.3,"backend":"ARM CPU"}
+```
+
+Sound event:
+
+```json
+{"type":"sound_event","timestamp_ms":3000,"topk":[{"index":0,"label":"Speech","score":0.9}],"stable_event":"Speech","transition":"EVENT_START","inference_ms":42.0,"backend":"RKNN/NPU"}
+```
+
+Status and VAD messages use `type=status` and `type=vad`. No confidence is fabricated for ASR.
+
+## Testing status
+
+- Real fixed-WAV Chinese ASR: PASS on Windows ONNX CPU; both official 16 kHz Chinese samples produced non-empty Chinese text with RTF 0.013--0.016.
+- C++17 portable ASR wrapper host compile: PASS with MSVC/CMake.
+- C++ Linux receiver: PASS on the RK3568 board with real TCP PCM, VAD, sherpa-onnx C API CPU ASR and YAMNet RKNN.
+- PC GUI/protocol/scripts: Python syntax checked; real GUI display and physical microphone remain to run in the user session.
+- YAMNet RKNN: board acceptance PASS; the full pipeline measured 42.60--56.66 ms per 3 s window on `root@192.168.77.2`.
+- Board CPU ASR: real Chinese partial/final text PASS, but 20 ms feed RTF was 3.5--7.4; RKNN/hybrid conversion and A/B comparison remain `TO VERIFY ON RK3568`.
+- Formal `/root/edgeaudio` runtime package: fixed-WAV TCP acceptance PASS with bundled ARM64 shared libraries and thermal guard; live microphone/GUI/reconnect remains for the user session.
+
+The board result is recorded in `docs/board_validation_2026-08-20.md`: the
+current isolated board build has both C++ backends enabled, and the full
+pipeline produced real YAMNet RKNN Top-5 plus real Chinese ASR text. CPU ASR
+is a verified fallback but not yet real-time on this board; no ASR RKNN model
+is claimed until conversion and operator validation succeed.
+
+## Engineering differences
+
+Third-party runtime/model code is isolated behind `AsrEngine` and documented in `THIRD_PARTY.md`. EdgeAudio owns the TCP PCM protocol, bounded multi-consumer timeline, VAD gate, YAMNet window/stabilizer, result fusion JSON, command parser, GUI, reconnect behavior, deployment scripts, and performance fields.
+
+## Scope boundary
+
+No speaker recognition, TTS, LLM, agent, independent KWS, database, web UI, or training pipeline is included in this first version.
+
